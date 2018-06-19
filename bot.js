@@ -75,10 +75,11 @@ client.on('message', async (msg) => {
                 break;
             default:
                 msg.channel.send("**Usage:** !league (enable|disable)");
-                break;
         }
+        break;
     case "source":
-        msg.channel.send('League API and other stuff can be found here.\nhttps://github.com/ThatOneTqnk/leaguelog')
+        msg.channel.send('League API and other stuff can be found here.\nhttps://github.com/ThatOneTqnk/leaguelog');
+        break;
     
     default:
         msg.channel.send('Unknown command!');
