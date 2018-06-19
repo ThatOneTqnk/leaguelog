@@ -37,6 +37,7 @@ client.on('message', async (msg) => {
             case "info":
                 if(!fullmsg[2]) {
                     msg.channel.send('**Usage:** !league info (summonerName)');
+                    break;
                 } else {
                     msg.channel.send('Fetching information... Please wait.');
                     leagueInstance.defaultCache();
@@ -73,7 +74,8 @@ client.on('message', async (msg) => {
                 }
                 break;
             default:
-                msg.channel.send("**Usage:** !league (enable|disable)")
+                msg.channel.send("**Usage:** !league (enable|disable)");
+                break;
         }
     case "source":
         msg.channel.send('League API and other stuff can be found here.\nhttps://github.com/ThatOneTqnk/leaguelog')
