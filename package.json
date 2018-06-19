@@ -13,8 +13,7 @@
     "discord.js": "^11.3.2",
     "express": "^4.16.3",
     "morgan": "^1.9.0",
-    "request": "^2.87.0",
-    "stats-lite": "^2.1.1"
+    "request": "^2.87.0"
   },
   "author": "me",
   "license": "ISC"

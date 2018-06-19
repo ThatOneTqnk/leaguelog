@@ -2,12 +2,13 @@ const Discord = require('discord.js');
 const client = new Discord.Client();
 const request = require('request');
 const config = require('./config.json');
+const League = require('./league.js');
+
+let leagueInstance = new League();
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
-
-let leaguetrack = true;
 
 client.on('message', async (msg) => {
   if(!msg.content.startsWith('!')) return;
@@ -15,89 +16,71 @@ client.on('message', async (msg) => {
   let fullmsg = actualmsg.split(' ');
   actualmsg = fullmsg[0]
   switch(actualmsg) {
-    case "ping": 
-        msg.reply('Pong!');
-        break;
     case "league":
         switch(fullmsg[1]) {
             case "enable":
-                if(leaguetrack) {
+                if(leagueInstance.track) {
                     msg.channel.send("League tracking already enabled.")
                 } else {
-                    leaguetrack = true;
+                    leagueInstance.track = true;
                     msg.channel.send("League tracking has been enabled.")
                 }
                 break;
             case "disable":
-                if(!leaguetrack) {
+                if(!leagueInstance.track) {
                     msg.channel.send("League tracking already disabled.")
                 } else {
-                    leaguetrack = false;
+                    leagueInstance.track = false;
                     msg.channel.send("League tracking has been disabled.")
                 }
                 break;
             case "info":
-                var allchamps = []
                 if(!fullmsg[2]) {
                     msg.channel.send('**Usage:** !league info (summonerName)');
                 } else {
                     msg.channel.send('Fetching information... Please wait.');
-                    console.log('wtf');
-                    let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${config.apikey}`);
-                    champs = JSON.parse(champs);
-                    champs = champs.data
-                    console.log(champs);
-                    for (var key in champs) {
-                        if (champs.hasOwnProperty(key)) {
-                            // console.log(key + " -> " + champs[key].id);
-                            allchamps.push({champ: key, id: champs[key].id})
-                        }
-                    }
-                    console.log(allchamps);
-                    let info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${fullmsg[2]}?api_key=${config.apikey}`);
-                    info1 = JSON.parse(info1);
-                    let info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey}`);
-                    // console.log(info2)
-                    info2 = JSON.parse(info2);
-                    let matches = info2.matches;
-                    matches.forEach((val, index) => {
-                        allchamps.forEach((val2) => {
-                            if(val.champion === val2.id) {
-                                console.log(val2.champ);
-                            }
-                        })
+                    leagueInstance.defaultCache();
+                    let user = await leagueInstance.userInfo(fullmsg[2]).catch(e => {
+                        msg.channel.send(e);
                     });
-                    msg.channel.send('pt2 in logs');
+                    if(!user) break;
                     msg.channel.send({
-                        "content": "Info:",
                         "embed": {
-                          "title": `Statistics for ${info1.name}`,
-                          "color": 2370121,
+                          "color": 4144495,
+                          "thumbnail": {
+                            "url": "https://i.imgur.com/x17LAwy.png"
+                          },
                           "author": {
-                            "name": "LoLLogs",
-                            "url": "https://discordapp.com",
-                            "icon_url": "https://cdn.discordapp.com/embed/avatars/0.png"
+                            "name": `User: ${user.name}`
                           },
                           "fields": [
                             {
-                              "name": "Summoner Level",
-                              "value": `Level ${info1.summonerLevel}`
+                                "name": "Summoner Level",
+                                "value": `${user.level}`
                             },
                             {
-                              "name": "Death",
-                              "value": "death"
+                                "name": "Most Recently Used Champion (Last 100 games)",
+                                "value": `${user.recentChamp}`
+                            },
+                            {
+                                "name": "Total games played:",
+                                "value": `${user.totalMatches}`
                             }
                           ]
                         }
                     });
-                    console.log(info1);
-
                     break;
                 }
                 break;
             default:
                 msg.channel.send("**Usage:** !league (enable|disable)")
         }
+    case "source":
+        msg.channel.send('League API and other stuff can be found here.\n')
+    
+    default:
+        msg.channel.send('Unknown command!');
+        
    }
 });
 
