@@ -1,7 +1,12 @@
 const Discord = require('discord.js');
 const client = new Discord.Client();
 const request = require('request');
-const config = require('./config.json');
+let config;
+try {
+    config = require('./config.json');
+} catch(e) {
+    console.log('config.json is hidden. Shell alternatives will be accessed.')
+}
 const League = require('./league.js');
 
 let leagueInstance = new League();
@@ -108,4 +113,4 @@ function filterIt(arr, searchKey) {
     });
 }
 
-client.login(`${config.tokenbot}`)
+client.login(`${config.tokenbot || process.env.tokenbot}`)

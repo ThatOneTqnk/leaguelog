@@ -1,5 +1,10 @@
 const request = require('request');
-const config = require('./config.json');
+let config;
+try {
+    config = require('./config.json');
+} catch(e) {
+    console.log('config.json is hidden. Shell alternatives will be accessed.');
+}
 
 module.exports = class League {
     constructor() {
@@ -18,14 +23,14 @@ module.exports = class League {
 
     userInfo(user) {
         return new Promise(async (resolve, reject) => {
-            let info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${config.apikey}`).catch(e => {
+            let info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${config.apikey || process.env.apikey}`).catch(e => {
                 reject(this.err[e.errtype]);
             });
             info1 = JSON.parse(info1);
-            let info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey}`).catch(e => {
+            let info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey || process.env.apikey}`).catch(e => {
                 reject(this.matcherr[e.errtype]);
             });
-            let info3 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey}&beginIndex=20000000`).catch(e => {
+            let info3 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey || process.env.apikey}&beginIndex=20000000`).catch(e => {
                 reject(this.matcherr[e.errtype]);
             });
             info3 = JSON.parse(info3);
@@ -51,13 +56,13 @@ module.exports = class League {
         });
     }
     defaultCache() {
-        this.cache = config.defaultcache
+        this.cache = (config.defaultcache || process.env.defaultcache)
     }
 
     refreshCache() {
         return new Promise(async (resolve, reject) => {
             this.cache = [];
-            let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${config.apikey}`).catch((err) => {
+            let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${config.apikey || process.env.apikey}`).catch((err) => {
                 reject(this.err[e.errtype]);
             })
             champs = JSON.parse(champs);
