@@ -23,10 +23,18 @@ client.on('message', async (msg) => {
   switch(actualmsg) {
     case "league":
         switch(fullmsg[1]) {
+            case "status":
+                let resString = (leagueInstance.track) ? "enabled":"disabled";
+                msg.channel.send(`League tracking is ${resString}.`);
+                break;
             case "enable":
                 if(leagueInstance.track) {
                     msg.channel.send("League tracking already enabled.")
                 } else {
+                    if(leagueInstance.tracked.length === 0) {
+                        msg.channel.send("Cannot track empty tracklist.\n\nPlease add users by using\n\n`!league track (user)`.");
+                        break;
+                    }
                     leagueInstance.track = true;
                     msg.channel.send("League tracking has been enabled.")
                 }
@@ -39,6 +47,37 @@ client.on('message', async (msg) => {
                     msg.channel.send("League tracking has been disabled.")
                 }
                 break;
+            case "clear":
+            case "empty":
+                leagueInstance.tracked = [];
+                msg.channel.send('Cleared player trackers.');
+                break;
+            case "list":
+                if(leagueInstance.tracked.length === 0) {
+                    msg.channel.send('No players are being tracked.');
+                    break;
+                }
+                msg.channel.send(`List of tracked players:\n${leagueInstance.tracked.join(', ')}`);
+                break;
+            case "track":
+                if(!fullmsg[2]) {
+                    msg.channel.send('**Usage:** !league track (summonerName)');
+                    break;
+                }
+                if(leagueInstance.tracked.length >= 10) {
+                    msg.channel.send('League bot can only track 10 users at maximum.');
+                    break;
+                }
+                msg.channel.send('Adding player to track list...');
+                let trackPlayer;
+                try {
+                    trackPlayer = await leagueInstance.trackAdd(fullmsg[2]);
+                } catch(e) {
+                    msg.channel.send(e);
+                    break;
+                }
+                msg.channel.send(`Successfully added ${fullmsg[2]} to track list.`);
+                break;
             case "info":
                 if(!fullmsg[2]) {
                     msg.channel.send('**Usage:** !league info (summonerName)');
@@ -47,7 +86,7 @@ client.on('message', async (msg) => {
                     msg.channel.send('Fetching information... Please wait.');
                     leagueInstance.defaultCache();
                     let user = await leagueInstance.userInfo(fullmsg[2]).catch(e => {
-                        msg.channel.send(e);
+                        msg.channel.send(e.text);
                     });
                     if(!user) break;
                     msg.channel.send({

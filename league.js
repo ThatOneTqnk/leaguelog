@@ -1,38 +1,81 @@
 const request = require('request');
+var events = require('events'),
+	util = require('util');
 let config;
 try {
     config = require('./config.json');
 } catch(e) {
     console.log('config.json is hidden. Shell alternatives will be accessed.');
 }
+let apipass = config.apikey || process.env.apikey;
 
 module.exports = class League {
     constructor() {
+        this.tracked = [];
         this.err = [
-            'API Token may be expired. Contact developer if issue persists.',
-            'User could not be found.'
+            {text: 'API Token may be expired. Contact developer if issue persists.', err: 0},
+            {text: 'User could not be found.', err: 1}
         ]
         this.matcherr = [
-            'User has no valid match history. Recent champion could not be determined.',
-            'User has no valid match history. Recent champion could not be determined.'
+            {text: 'User has no valid match history. Recent champion could not be determined.', err: 0},
+            {text: 'User has no valid match history. Recent champion could not be determined.', err: 0}
         ]
         this.cache = [];
-        this.track = true;
+        this.track = false;
         this.defaultCache();
+        this.registerEvents();
+    }
+
+    registerEvents() {
+        let trackRecord = new EventEmitter();
+        trackRecord.on('win')
+        trackRecord.emit()
+        setInterval(() => {
+
+        }, 500)
+    }
+
+    trackAdd(user) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const checkUser = await this.verifyUser(user);
+                this.tracked.push(checkUser.name);
+                resolve(this.tracked);
+            } catch (e) {
+                reject(e.text);
+            }
+        });
+    }
+
+    verifyUser(user) {
+        return new Promise(async (resolve, reject) => {
+            // console.log('entering verification method');
+            console.log(apipass);
+            try {
+                let verified = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${apipass}`);
+                verified = JSON.parse(verified);
+                resolve(verified);
+            } catch(e) {
+                reject(this.err[e.errtype]);
+            };
+        });
     }
 
     userInfo(user) {
         return new Promise(async (resolve, reject) => {
-            let info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${config.apikey || process.env.apikey}`).catch(e => {
+            let info1, info2, info3;
+            try {
+                info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${apipass}`);
+            } catch(e) {
                 reject(this.err[e.errtype]);
-            });
+            }
             info1 = JSON.parse(info1);
-            let info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey || process.env.apikey}`).catch(e => {
+            try {
+                info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}`);
+                info3 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}&beginIndex=20000000`);
+            } catch(e) {
                 reject(this.matcherr[e.errtype]);
-            });
-            let info3 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${config.apikey || process.env.apikey}&beginIndex=20000000`).catch(e => {
-                reject(this.matcherr[e.errtype]);
-            });
+            }
             info3 = JSON.parse(info3);
             info2 = JSON.parse(info2);
             info2 = info2.matches;
@@ -61,20 +104,20 @@ module.exports = class League {
 
     refreshCache() {
         return new Promise(async (resolve, reject) => {
-            this.cache = [];
-            let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${config.apikey || process.env.apikey}`).catch((err) => {
-                reject(this.err[e.errtype]);
-            })
-            champs = JSON.parse(champs);
-            champs = champs.data;
-
-            for (var key in champs) {
-                if (champs.hasOwnProperty(key)) {
-                    this.cache.push({champ: key, id: champs[key].id})
+            try {
+                this.cache = [];
+                let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${apipass}`);
+                champs = JSON.parse(champs);
+                champs = champs.data;
+                for (var key in champs) {
+                    if (champs.hasOwnProperty(key)) {
+                        this.cache.push({champ: key, id: champs[key].id})
+                    }
                 }
+                resolve(this.cache);
+            } catch(e) {
+                reject(this.err[e.errtype]);
             }
-
-            resolve(this.cache);
         }); 
     }
 
