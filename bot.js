@@ -50,14 +50,15 @@ client.on('message', async (msg) => {
             case "clear":
             case "empty":
                 leagueInstance.tracked = [];
+                leagueInstance.dispTrack = [];
                 msg.channel.send('Cleared player trackers.');
                 break;
             case "list":
-                if(leagueInstance.tracked.length === 0) {
+                if(leagueInstance.dispTrack.length === 0) {
                     msg.channel.send('No players are being tracked.');
                     break;
                 }
-                msg.channel.send(`List of tracked players:\n${leagueInstance.tracked.join(', ')}`);
+                msg.channel.send(`List of tracked players:\n${leagueInstance.dispTrack.join(', ')}`);
                 break;
             case "track":
                 if(!fullmsg[2]) {

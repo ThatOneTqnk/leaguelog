@@ -1,6 +1,8 @@
 const request = require('request');
 var events = require('events'),
-	util = require('util');
+    util = require('util');
+const User = require('./tracked.js');
+
 let config;
 try {
     config = require('./config.json');
@@ -11,23 +13,24 @@ let apipass = config.apikey || process.env.apikey;
 
 module.exports = class League {
     constructor() {
+        this.dispTrack = [];
         this.tracked = [];
         this.err = [
             {text: 'API Token may be expired. Contact developer if issue persists.', err: 0},
             {text: 'User could not be found.', err: 1}
         ]
         this.matcherr = [
-            {text: 'User has no valid match history. Recent champion could not be determined.', err: 0},
-            {text: 'User has no valid match history. Recent champion could not be determined.', err: 0}
+            {text: 'API Token may be expired. Contact developer if issue persists.', err: 0},
+            {text: 'User has no valid match history. Recent champion could not be determined.', err: 1}
         ]
         this.cache = [];
         this.track = false;
         this.defaultCache();
-        this.registerEvents();
+        // this.registerEvents();
     }
 
     registerEvents() {
-        let trackRecord = new EventEmitter();
+        let trackRecord = new events();
         trackRecord.on('win')
         trackRecord.emit()
         setInterval(() => {
@@ -37,20 +40,61 @@ module.exports = class League {
 
     trackAdd(user) {
         return new Promise(async (resolve, reject) => {
+            if(user.replace(/[^a-zA-Z0-9-_]/gi) !== user) {
+                reject('Invalid input.');
+                return;
+            }
+            let checkUser, winUser;
             try {
-                const checkUser = await this.verifyUser(user);
+                checkUser = await this.verifyUser(user);
                 this.tracked.push(checkUser.name);
-                resolve(this.tracked);
             } catch (e) {
                 reject(e.text);
+                return;
             }
+            try {
+                winUser = await this.latestWin(checkUser.name, checkUser.accountId);
+            } catch(e) {
+                winUser = {gameId: -1};
+            }
+            this.dispTrack[(this.dispTrack.length)] = checkUser.name;
+            this.tracked[(this.tracked.length)] = new User(checkUser.name, winUser);
+            console.log(this.tracked);
+            resolve(this.tracked);
         });
     }
 
+    latestWin(user, forceVerify = undefined) {
+        return new Promise(async (resolve, reject) => {
+            let checkUser = forceVerify;
+            if(!forceVerify) console.log('Verification must be done for latestWin.')
+            try {
+                if(!forceVerify) checkUser = await this.verifyUser(user);
+            } catch(e) {
+                reject(e.text);
+                return;
+            }
+            if(checkUser.accountId) checkUser = checkUser.accountId;
+            let latWin;
+            try {
+                latWin = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser}?api_key=${apipass}`);
+                latWin = JSON.parse(latWin);
+                resolve(latWin.matches[0]);
+            } catch(e) {
+                console.log(e);
+                console.log('Error in receiving match history.');
+                reject(this.matcherr[e.errtype].text);
+                return;
+            }
+            return;
+        });
+    }
+
+
+
+
     verifyUser(user) {
         return new Promise(async (resolve, reject) => {
-            // console.log('entering verification method');
-            console.log(apipass);
             try {
                 let verified = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${apipass}`);
                 verified = JSON.parse(verified);
@@ -58,6 +102,36 @@ module.exports = class League {
             } catch(e) {
                 reject(this.err[e.errtype]);
             };
+        });
+    }
+
+    getRecord(user, forceVerify = undefined) {
+        return new Promise(async (resolve, reject) => {
+            let checkUser, winCount;
+            if(!forceVerify) {
+                try {
+                    checkUser = await this.verifyUser(user);
+                } catch(e) {
+                    reject(e.text);
+                    return;
+                }
+            } else {
+                checkUser = {accountId: forceVerify.accountId};
+            }
+            try {
+                winCount = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser.accountId}?api_key=${apipass}&beginIndex=20000000`);
+                winCount = JSON.parse(winCount);
+            } catch(e) {
+                console.log(e);
+                reject(this.matcherr[e.errtype].text);
+                return;
+            }
+            if(winCount.status && winCount.status.status_code === 404) {
+                reject('User has no match history.');
+                return;
+            }
+            console.log(winCount);
+            resolve(winCount.totalGames);
         });
     }
 
@@ -83,11 +157,11 @@ module.exports = class League {
             info2.forEach((val) => {
                 champIds.push(val.champion);
             });
-            var mode = modez(champIds);
+            var mode = moded(champIds);
             var mostchamp = this.cache.findIndex((element) => {
                 return element.id === mode;
             });
-            console.log(this.cache[mostchamp].champ);
+            // console.log(this.cache[mostchamp].champ);
             resolve({
                 id: info1.id,
                 accountId: info1.accountId,
@@ -101,6 +175,16 @@ module.exports = class League {
     defaultCache() {
         this.cache = (config.defaultcache || process.env.defaultcache)
     }
+
+    // getId(user) {
+    //     let forceVerify;
+    //     try {
+    //         forceVerify = await this.verifyUser(user);
+    //     } catch(e) {
+    //         return {err: true, msg: e.text};
+    //     }
+    //     return {err: false, accountId: forceVerify.accountId};
+    // }
 
     refreshCache() {
         return new Promise(async (resolve, reject) => {
@@ -138,7 +222,7 @@ function doRequest(url) {
     });
 }
 
-function modez(array) {
+function moded(array) {
     if(array.length == 0)
         return null;
     var modeMap = {};
