@@ -47,6 +47,7 @@ module.exports = class League {
                 }
                 // Below condition checks if first match in user's match list is incosistent with cache. If so, determine whether it was a win or not.
                 if(loopWin.gameId !== val.latestMatch.gameId) {
+                    val.latestMatch.gameId = loopWin.gameId;
                     matchInfo = await this.analyzeMatch(loopWin.gameId, val.accid);
                     this.funnel.emit('match', matchInfo);
                 };
