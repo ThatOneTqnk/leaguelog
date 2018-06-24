@@ -15,8 +15,9 @@ client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
-leagueInstance.funnel.on('win', (user) => {
-    console.log(`${user} has won a game!`);
+leagueInstance.funnel.on('win', (details) => {
+    console.log(`${details.user} has played a match!`);
+    console.log(`Details: ${details}`)
 })
 
 /*

@@ -9,6 +9,7 @@ try {
 } catch(e) {
     console.log('config.json is hidden. Shell alternatives will be accessed.');
 }
+
 let apipass = config.apikey || process.env.apikey;
 
 module.exports = class League {
@@ -24,6 +25,9 @@ module.exports = class League {
             {text: 'User has no valid match history.', err: 1}
         ]
         this.champCache = [];
+        this.spellCache = [];
+        this.mapCache = [];
+        this.itemCache = [];
         this.track = false;
         this.funnel = new events();
         this.defaultCache();
@@ -32,22 +36,19 @@ module.exports = class League {
     }
 
     registerEvents() {
-        let loopWin, winInfo;
+        let loopWin, matchInfo;
         setInterval(() => {
             if(this.tracked.length === 0) return;
             this.tracked.forEach(async (val) => {
                 try {
-                    loopWin = await this.latestWin(val.name, val.accid);  
+                    loopWin = await this.latestMatch(val.name, val.accid);  
                 } catch(e) {
                     loopWin = {gameId: -1};
                 }
-
-                winInfo = await this.analyzeMatch(val.latestWin.gameId, val.accid);
-                // console.log('passed try catch.');
-                if(loopWin.gameId !== val.latestWin.gameId) {
-                    winInfo = await analyzeMatch(val.latestWin.gameId, val.accid);
-                    
-                    // this.funnel.emit('win', val.name);
+                // Below condition checks if first match in user's match list is incosistent with cache. If so, determine whether it was a win or not.
+                if(loopWin.gameId !== val.latestMatch.gameId) {
+                    matchInfo = await this.analyzeMatch(loopWin.gameId, val.accid);
+                    this.funnel.emit('match', matchInfo);
                 };
             });
         }, 3500);
@@ -55,7 +56,7 @@ module.exports = class League {
 
     analyzeMatch(id, userId = -1) {
         return new Promise(async (resolve, reject) => {
-            let matchDeets, playerID;
+            let matchDeets, playerID, playerName;
             try {
                 matchDeets = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matches/${id}?api_key=${apipass}`);
             } catch(e) {
@@ -68,9 +69,11 @@ module.exports = class League {
             matchDeets.participantIdentities.forEach((val) => {
                 if(val.player.accountId === userId) {
                     playerID = val.participantId;
+                    playerName = val.player.summonerName;
                 }
             });
             let userStats = matchDeets.participants[(playerID - 1)];
+            filterDeets.user = playerName;
             filterDeets.userWin = userStats.stats.win;
             filterDeets.champion = this.champLookup(userStats.championId);
             filterDeets.lane = capsFirst(userStats.timeline.lane);
@@ -85,9 +88,22 @@ module.exports = class League {
             filterDeets.firstBlood = userStats.stats.firstBloodKill;
             filterDeets.spells = [this.spellLookup(userStats.spell1Id), this.spellLookup(userStats.spell2Id)];
             filterDeets.cs = userStats.stats.totalMinionsKilled;
-            
+            filterDeets.items = [
+                this.itemLookup(userStats.stats.item0),
+                this.itemLookup(userStats.stats.item1),
+                this.itemLookup(userStats.stats.item2),
+                this.itemLookup(userStats.stats.item3),
+                this.itemLookup(userStats.stats.item4),
+                this.itemLookup(userStats.stats.item5),
+            ]
+            filterDeets.trinket = this.itemLookup(userStats.stats.item6);
+            filterDeets.champLevel = userStats.stats.champLevel;
+            filterDeets.matchTime = Math.ceil(matchDeets.gameDuration / 60);
+            filterDeets.map = this.mapLookup(matchDeets.mapId);
+            // console.log(filterDeets);
 
             // console.log(matchDeets);
+            resolve(filterDeets);
         })
     }
 
@@ -97,7 +113,7 @@ module.exports = class League {
                 reject('Invalid input.');
                 return;
             }
-            let checkUser, winUser;
+            let checkUser, matUser;
             try {
                 checkUser = await this.verifyUser(user);
                 // this.tracked.push(checkUser.name);
@@ -106,22 +122,22 @@ module.exports = class League {
                 return;
             }
             try {
-                winUser = await this.latestWin(checkUser.name, checkUser.accountId);
+                matUser = await this.latestMatch(checkUser.name, checkUser.accountId);
             } catch(e) {
                 console.log('handled?');
-                winUser = {gameId: -1};
+                matUser = {gameId: -1};
             }
             this.dispTrack[(this.dispTrack.length)] = checkUser.name;
-            this.tracked[(this.tracked.length)] = new User(checkUser.name, checkUser.accountId, winUser);
+            this.tracked[(this.tracked.length)] = new User(checkUser.name, checkUser.accountId, matUser);
             // console.log(this.tracked);
             resolve(this.tracked);
         });
     }
 
-    latestWin(user, forceVerify = undefined) {
+    latestMatch(user, forceVerify = undefined) {
         return new Promise(async (resolve, reject) => {
             let checkUser = forceVerify;
-            if(!forceVerify) console.log('Verification must be done for latestWin.')
+            if(!forceVerify) console.log('Verification must be done for latestMatch.')
             try {
                 if(!forceVerify) checkUser = await this.verifyUser(user);
             } catch(e) {
@@ -129,11 +145,11 @@ module.exports = class League {
                 return;
             }
             if(checkUser.accountId) checkUser = checkUser.accountId;
-            let latWin;
+            let latMat;
             try {
-                latWin = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser}?api_key=${apipass}`);
-                latWin = JSON.parse(latWin);
-                resolve(latWin.matches[0]);
+                latMat = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser}?api_key=${apipass}`);
+                latMat = JSON.parse(latMat);
+                resolve(latMat.matches[0]);
             } catch(e) {
                 console.log(e);
                 console.log('Error in receiving match history.');
@@ -203,6 +219,20 @@ module.exports = class League {
         return result[0].spell;
     }
 
+    itemLookup(id) {
+        let result = this.itemCache.filter(function(obj) {
+            return obj.id == id;
+        });
+        return result[0].item;
+    }
+
+    mapLookup(id) {
+        let result = this.mapCache.filter(function(obj) {
+            return obj.id == id;
+        });
+        return result[0].map;
+    }
+
 
     userInfo(user) {
         return new Promise(async (resolve, reject) => {
@@ -242,8 +272,10 @@ module.exports = class League {
         });
     }
     defaultCache() {
-        this.champCache = (config.champCache || process.env.defaultcache)
-        this.spellCache = (config.spellCache || process.env.spellCache)
+        this.champCache = (config.champCache || process.env.defaultcache);
+        this.spellCache = (config.spellCache || process.env.spellCache);
+        this.itemCache = (config.itemCache || process.env.itemCache);
+        this.mapCache = (config.mapCache || process.env.mapCache);
     }
 
     // getId(user) {
@@ -284,7 +316,32 @@ module.exports = class League {
             } catch(e) {
                 reject(this.err[e.errtype]);
             }
-            console.log(this.spellCache);
+            try {
+                this.itemCache = [];
+                let items = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/items?api_key=${apipass}`);
+                items = JSON.parse(items);
+                items = items.data;
+                for(var key in items) {
+                    if(items.hasOwnProperty(key)) {
+                        this.itemCache.push({item: items[key].name, id: items[key].id});
+                    }
+                }
+            } catch(e) {
+                reject(this.err[e.errtype]);
+            } 
+            try {
+                this.mapCache = [];
+                let maps = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/maps?api_key=${apipass}`);
+                maps = JSON.parse(maps);
+                maps = maps.data;
+                for(var key in maps) {
+                    if(maps.hasOwnProperty(key)) {
+                        this.mapCache.push({map: maps[key].mapName, id: maps[key].mapId});
+                    }
+                }
+            } catch(e) {
+                reject(this.err[e.errtype])
+            }
             resolve('Refreshed all statics.');
         }); 
     }
