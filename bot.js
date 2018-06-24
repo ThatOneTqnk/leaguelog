@@ -15,6 +15,34 @@ client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
+leagueInstance.funnel.on('win', (user) => {
+    console.log(`${user} has won a game!`);
+})
+
+/*
+{
+  "embed": {
+    "thumbnail": {
+      "url": "variable"
+    },
+    "fields": [
+      {
+        "name": "Variable won a game!",
+        "value": "some of these properties have certain limits..."
+      },
+      {
+        "name": "Team info?",
+        "value": "try exceeding some of them!"
+      },
+      {
+        "name": "Other stuff :shrug:",
+        "value": "an informative error should show up, and this view will remain as-is until all issues are fixed"
+      }
+    ]
+  }
+}
+*/
+
 client.on('message', async (msg) => {
   if(!msg.content.startsWith('!')) return;
   let actualmsg = msg.content.split('!')[1]

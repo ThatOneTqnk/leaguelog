@@ -25,17 +25,41 @@ module.exports = class League {
         ]
         this.cache = [];
         this.track = false;
+        this.funnel = new events();
         this.defaultCache();
-        // this.registerEvents();
+        this.registerEvents();
     }
 
     registerEvents() {
-        let trackRecord = new events();
-        trackRecord.on('win')
-        trackRecord.emit()
+        let loopWin;
+        let winInfo;
         setInterval(() => {
+            if(this.tracked.length === 0) return;
+            this.tracked.forEach(async (val) => {
+                try {
+                    loopWin = await this.latestWin(val.name, val.accid);  
+                } catch(e) {
+                    loopWin = {gameId: -1};
+                }
+                // console.log('passed try catch.');
+                if(loopWin.gameId !== val.latestWin.gameId) {
+                    winInfo = await analyzeMatch(val.latestWin.gameId);
+                    this.funnel.emit('win', val.name);
+                };
+            });
+        }, 3500);
+    }
 
-        }, 500)
+    analyzeMatch(id) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                let matchDeets = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matches/${id}?api_key=${apipass}`);
+            } catch(e) {
+                reject('Bad');
+                return;
+            }
+
+        })
     }
 
     trackAdd(user) {
@@ -47,7 +71,7 @@ module.exports = class League {
             let checkUser, winUser;
             try {
                 checkUser = await this.verifyUser(user);
-                this.tracked.push(checkUser.name);
+                // this.tracked.push(checkUser.name);
             } catch (e) {
                 reject(e.text);
                 return;
@@ -55,11 +79,12 @@ module.exports = class League {
             try {
                 winUser = await this.latestWin(checkUser.name, checkUser.accountId);
             } catch(e) {
+                console.log('handled?');
                 winUser = {gameId: -1};
             }
             this.dispTrack[(this.dispTrack.length)] = checkUser.name;
-            this.tracked[(this.tracked.length)] = new User(checkUser.name, winUser);
-            console.log(this.tracked);
+            this.tracked[(this.tracked.length)] = new User(checkUser.name, checkUser.accountId, winUser);
+            // console.log(this.tracked);
             resolve(this.tracked);
         });
     }
