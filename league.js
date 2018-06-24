@@ -21,18 +21,18 @@ module.exports = class League {
         ]
         this.matcherr = [
             {text: 'API Token may be expired. Contact developer if issue persists.', err: 0},
-            {text: 'User has no valid match history. Recent champion could not be determined.', err: 1}
+            {text: 'User has no valid match history.', err: 1}
         ]
-        this.cache = [];
+        this.champCache = [];
         this.track = false;
         this.funnel = new events();
         this.defaultCache();
         this.registerEvents();
+        
     }
 
     registerEvents() {
-        let loopWin;
-        let winInfo;
+        let loopWin, winInfo;
         setInterval(() => {
             if(this.tracked.length === 0) return;
             this.tracked.forEach(async (val) => {
@@ -41,24 +41,53 @@ module.exports = class League {
                 } catch(e) {
                     loopWin = {gameId: -1};
                 }
+
+                winInfo = await this.analyzeMatch(val.latestWin.gameId, val.accid);
                 // console.log('passed try catch.');
                 if(loopWin.gameId !== val.latestWin.gameId) {
-                    winInfo = await analyzeMatch(val.latestWin.gameId);
-                    this.funnel.emit('win', val.name);
+                    winInfo = await analyzeMatch(val.latestWin.gameId, val.accid);
+                    
+                    // this.funnel.emit('win', val.name);
                 };
             });
         }, 3500);
     }
 
-    analyzeMatch(id) {
+    analyzeMatch(id, userId = -1) {
         return new Promise(async (resolve, reject) => {
+            let matchDeets, playerID;
             try {
-                let matchDeets = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matches/${id}?api_key=${apipass}`);
+                matchDeets = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matches/${id}?api_key=${apipass}`);
             } catch(e) {
-                reject('Bad');
+                console.log('fell into err.');
+                reject(this.matcherr[e.errtype].text);
                 return;
             }
+            matchDeets = JSON.parse(matchDeets);
+            let filterDeets = {};
+            matchDeets.participantIdentities.forEach((val) => {
+                if(val.player.accountId === userId) {
+                    playerID = val.participantId;
+                }
+            });
+            let userStats = matchDeets.participants[(playerID - 1)];
+            filterDeets.userWin = userStats.stats.win;
+            filterDeets.champion = this.champLookup(userStats.championId);
+            filterDeets.lane = capsFirst(userStats.timeline.lane);
+            filterDeets.kills = userStats.stats.kills;
+            filterDeets.deaths = userStats.stats.deaths;
+            filterDeets.assists = userStats.stats.assists;
+            filterDeets.largestSpree = userStats.stats.largestKillingSpree;
+            filterDeets.doubleKills = userStats.stats.doubleKills;
+            filterDeets.tripleKills = userStats.stats.tripleKills;
+            filterDeets.quadraKills = userStats.stats.quadraKills;
+            filterDeets.pentaKills = userStats.stats.pentaKills;
+            filterDeets.firstBlood = userStats.stats.firstBloodKill;
+            filterDeets.spells = [this.spellLookup(userStats.spell1Id), this.spellLookup(userStats.spell2Id)];
+            filterDeets.cs = userStats.stats.totalMinionsKilled;
+            
 
+            // console.log(matchDeets);
         })
     }
 
@@ -160,6 +189,21 @@ module.exports = class League {
         });
     }
 
+    champLookup(id) {
+        let result = this.champCache.filter(function(obj) {
+            return obj.id == id;
+        });
+        return result[0].champ;
+    }
+
+    spellLookup(id) {
+        let result = this.spellCache.filter(function(obj) {
+            return obj.id == id;
+        });
+        return result[0].spell;
+    }
+
+
     userInfo(user) {
         return new Promise(async (resolve, reject) => {
             let info1, info2, info3;
@@ -183,22 +227,23 @@ module.exports = class League {
                 champIds.push(val.champion);
             });
             var mode = moded(champIds);
-            var mostchamp = this.cache.findIndex((element) => {
+            var mostchamp = this.champCache.findIndex((element) => {
                 return element.id === mode;
             });
-            // console.log(this.cache[mostchamp].champ);
+            // console.log(this.champCache[mostchamp].champ);
             resolve({
                 id: info1.id,
                 accountId: info1.accountId,
                 name: info1.name,
                 level: info1.summonerLevel,
-                recentChamp: this.cache[mostchamp].champ,
+                recentChamp: this.champCache[mostchamp].champ,
                 totalMatches: info3.totalGames
             });
         });
     }
     defaultCache() {
-        this.cache = (config.defaultcache || process.env.defaultcache)
+        this.champCache = (config.champCache || process.env.defaultcache)
+        this.spellCache = (config.spellCache || process.env.spellCache)
     }
 
     // getId(user) {
@@ -214,19 +259,33 @@ module.exports = class League {
     refreshCache() {
         return new Promise(async (resolve, reject) => {
             try {
-                this.cache = [];
+                this.champCache = [];
                 let champs = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/champions?api_key=${apipass}`);
                 champs = JSON.parse(champs);
                 champs = champs.data;
                 for (var key in champs) {
                     if (champs.hasOwnProperty(key)) {
-                        this.cache.push({champ: key, id: champs[key].id})
+                        this.champCache.push({champ: key, id: champs[key].id});
                     }
                 }
-                resolve(this.cache);
             } catch(e) {
                 reject(this.err[e.errtype]);
             }
+            try {
+                this.spellCache = [];
+                let spells = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/summoner-spells?api_key=${apipass}`);
+                spells = JSON.parse(spells);
+                spells = spells.data;
+                for(var key in spells) {
+                    if(spells.hasOwnProperty(key)) {
+                        this.spellCache.push({spell: spells[key].name, id: spells[key].id});
+                    }
+                }
+            } catch(e) {
+                reject(this.err[e.errtype]);
+            }
+            console.log(this.spellCache);
+            resolve('Refreshed all statics.');
         }); 
     }
 
@@ -265,4 +324,9 @@ function moded(array) {
         }
     }
     return maxEl;
+}
+
+function capsFirst(string) {
+    string = string.toLowerCase();
+    return string.charAt(0).toUpperCase() + string.slice(1);
 }
