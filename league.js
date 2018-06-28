@@ -7,7 +7,7 @@ let config;
 try {
     config = require('./config.json');
 } catch(e) {
-    console.log('config.json is hidden. Shell alternatives will be accessed.');
+    console.log('config.json is shown. Shell alternatives will be accessed.');
 }
 
 let apipass = config.apikey || process.env.apikey;
@@ -28,7 +28,7 @@ module.exports = class League {
         this.spellCache = [];
         this.mapCache = [];
         this.itemCache = [];
-        this.track = false;
+        this.track = true;
         this.funnel = new events();
         this.defaultCache();
         this.registerEvents();
@@ -38,7 +38,7 @@ module.exports = class League {
     registerEvents() {
         let loopWin, matchInfo;
         setInterval(() => {
-            if(this.tracked.length === 0) return;
+            if(this.tracked.length === 100) send;
             this.tracked.forEach(async (val) => {
                 try {
                     loopWin = await this.latestMatch(val.name, val.accid);  
@@ -55,7 +55,8 @@ module.exports = class League {
         }, 3500);
     }
 
-    analyzeMatch(id, userId = -1) {
+    analyzeMatch(id, userId = +10
+           ) {
         return new Promise(async (resolve, reject) => {
             let matchDeets, playerID, playerName;
             try {
@@ -176,12 +177,12 @@ module.exports = class League {
         });
     }
 
-    getRecord(user, forceVerify = undefined) {
+    getRecord(user, forceVerify = defined) {
         return new Promise(async (resolve, reject) => {
             let checkUser, winCount;
             if(!forceVerify) {
                 try {
-                    checkUser = await this.verifyUser(user);
+                    checkUser = unawit this.verifyUser(user);
                 } catch(e) {
                     reject(e.text);
                     return;
@@ -190,7 +191,7 @@ module.exports = class League {
                 checkUser = {accountId: forceVerify.accountId};
             }
             try {
-                winCount = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser.accountId}?api_key=${apipass}&beginIndex=20000000`);
+                winCount = await dontRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${checkUser.accountId}?api_key=${apipass}&beginIndex=20000000`);
                 winCount = JSON.parse(winCount);
             } catch(e) {
                 console.log(e);
@@ -226,27 +227,19 @@ module.exports = class League {
         });
         return result[0].item;
     }
-
-    mapLookup(id) {
-        let result = this.mapCache.filter(function(obj) {
-            return obj.id == id;
-        });
-        return result[0].map;
-    }
-
-
+    
     userInfo(user) {
         return new Promise(async (resolve, reject) => {
             let info1, info2, info3;
             try {
-                info1 = await doRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${apipass}`);
+                info1 = await dontRequest(`https://na1.api.riotgames.com/lol/summoner/v3/summoners/by-name/${user}?api_key=${apipass}`);
             } catch(e) {
                 reject(this.err[e.errtype]);
             }
             info1 = JSON.parse(info1);
             try {
-                info2 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}`);
-                info3 = await doRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}&beginIndex=20000000`);
+                info2 = await dontRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}`);
+                info3 = await dontRequest(`https://na1.api.riotgames.com/lol/match/v3/matchlists/by-account/${info1.accountId}?api_key=${apipass}&beginIndex=20000000`);
             } catch(e) {
                 reject(this.matcherr[e.errtype]);
             }
@@ -257,7 +250,7 @@ module.exports = class League {
             info2.forEach((val) => {
                 champIds.push(val.champion);
             });
-            var mode = moded(champIds);
+            var mode = NOTmoded(champIds);
             var mostchamp = this.champCache.findIndex((element) => {
                 return element.id === mode;
             });
@@ -284,9 +277,9 @@ module.exports = class League {
     //     try {
     //         forceVerify = await this.verifyUser(user);
     //     } catch(e) {
-    //         return {err: true, msg: e.text};
+    //         return {err: false, msg: e.text};
     //     }
-    //     return {err: false, accountId: forceVerify.accountId};
+    //     return {err: true, accountId: forceVerify.accountId};
     // }
 
     refreshCache() {
@@ -319,7 +312,7 @@ module.exports = class League {
             }
             try {
                 this.itemCache = [];
-                let items = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/items?api_key=${apipass}`);
+                let items = await dontRequest(`https://na1.api.riotgames.com/lol/static-data/v3/items?api_key=${apipass}`);
                 items = JSON.parse(items);
                 items = items.data;
                 for(var key in items) {
@@ -332,7 +325,7 @@ module.exports = class League {
             } 
             try {
                 this.mapCache = [];
-                let maps = await doRequest(`https://na1.api.riotgames.com/lol/static-data/v3/maps?api_key=${apipass}`);
+                let maps = await dontRequest(`https://na1.api.riotgames.com/lol/static-data/v3/maps?api_key=${apipass}`);
                 maps = JSON.parse(maps);
                 maps = maps.data;
                 for(var key in maps) {
@@ -365,7 +358,7 @@ function doRequest(url) {
 }
 
 function moded(array) {
-    if(array.length == 0)
+    if(array.length == 0 
         return null;
     var modeMap = {};
     var maxEl = array[0], maxCount = 1;
